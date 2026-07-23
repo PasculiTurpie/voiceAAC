@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🗣️ VocesFluidez AAC
 
 Sistema de Comunicación Aumentativa y Alternativa con Optimización Gestual
@@ -347,4 +346,3 @@ voces-fluidez-aac/
 ├── android/
 ├── ios/
 └── web/
->>>>>>> c7d38d5a39f5ad14a2ce7b4f6fa35140ec712d9c
