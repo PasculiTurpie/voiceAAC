@@ -284,6 +284,7 @@ class _MainAACScreenState extends State<MainAACScreen>
   int touchCount = 0;
   String conversationContext = '';
   String activeCategory = 'Saludos';
+  String _typedText = '';
 
   double speechRate = 0.5; // FlutterTTS rate ranges 0.0 - 1.0
   double speechPitch = 1.0;
@@ -302,15 +303,58 @@ class _MainAACScreenState extends State<MainAACScreen>
     "Dame un momento, estoy armando mi respuesta.",
   ];
 
+  List<String> humorPhrases = [
+    "¡Váyanse a la mierda!",
+    "¡Chúpalo entonces!",
+    "¡Está helado Juan!",
+    "¡Ya po, avívate!",
+    "¡Qué buena po!",
+    "¡Ándate a la chucha!",
+    "¡Toy cansado de escuchar leseras!",
+    "¡Tómate un armonil!",
+  ];
+
   final TextEditingController _contextController = TextEditingController();
   final TextEditingController _customPhraseController = TextEditingController();
+  final TextEditingController _humorPhraseController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _initTTS();
     _loadStoredFavorites();
+    _loadStoredHumor();
+  }
+
+  void _loadStoredHumor() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? stored = prefs.getStringList('aac_humor_phrases');
+    if (stored != null) {
+      setState(() {
+        humorPhrases = stored;
+      });
+    }
+  }
+
+  void _saveHumor() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('aac_humor_phrases', humorPhrases);
+  }
+
+  void _addHumorPhrase(String text) {
+    if (text.trim().isEmpty) return;
+    setState(() {
+      humorPhrases.add(text.trim());
+    });
+    _saveHumor();
+  }
+
+  void _deleteHumorPhrase(int index) {
+    setState(() {
+      humorPhrases.removeAt(index);
+    });
+    _saveHumor();
   }
 
   void _initTTS() async {
@@ -778,6 +822,7 @@ class _MainAACScreenState extends State<MainAACScreen>
                             Tab(text: "Temas"),
                             Tab(text: "Social"),
                             Tab(text: "Diálogo"),
+                            Tab(text: "Teclado"),
                             Tab(text: "Favoritas"),
                           ],
                         ),
@@ -791,7 +836,9 @@ class _MainAACScreenState extends State<MainAACScreen>
                               _buildSocialTab(),
                               // TAB 3: CHAT DIALOGUE LOG
                               _buildChatLogTab(),
-                              // TAB 4: FAVORITES
+                              // TAB 4: LARGE ACCESSIBLE KEYBOARD
+                              _buildLargeKeyboardTab(),
+                              // TAB 5: FAVORITES
                               _buildFavoritesTab(),
                             ],
                           ),
@@ -812,76 +859,273 @@ class _MainAACScreenState extends State<MainAACScreen>
     final categories = VocabularyData.fringeVocabulary.keys.toList();
     final items = VocabularyData.fringeVocabulary[activeCategory] ?? [];
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 40,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: categories.length,
-            itemBuilder: (context, idx) {
-              final cat = categories[idx];
-              final isSelected = cat == activeCategory;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: ChoiceChip(
-                  label: Text(cat, style: const TextStyle(fontSize: 11)),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() {
-                        activeCategory = cat;
-                      });
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(6),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 1.3,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "CATEGORÍAS TEMÁTICAS:",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.blueAccent,
             ),
-            itemCount: items.length,
-            itemBuilder: (context, idx) {
-              final item = items[idx];
-              return OutlinedButton(
-                onPressed: () => _addWordToSentence(item['text'], 'fringe'),
+          ),
+          const SizedBox(height: 4),
+          // Categories with Wrap
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: categories.map((cat) {
+              final isSelected = cat == activeCategory;
+              return ChoiceChip(
+                label: Text(
+                  cat,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+                selected: isSelected,
+                selectedColor: Colors.blue.shade200,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() {
+                      activeCategory = cat;
+                    });
+                  }
+                },
+              );
+            }).toList(),
+          ),
+          const Divider(height: 12),
+          const Text(
+            "SUB-ELEMENTOS DE CONVERSACIÓN:",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Subcategory items wrapped so they wrap downwards cleanly
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: items.map((item) {
+              return OutlinedButton.icon(
+                onPressed: () =>
+                    _addWordToSentence(item['text'] as String, 'fringe'),
                 style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      item['icon'] as IconData,
-                      size: 18,
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item['text'],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                icon: Icon(
+                  item['icon'] as IconData,
+                  size: 18,
+                  color: Colors.blue,
+                ),
+                label: Text(
+                  item['text'] as String,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               );
-            },
+            }).toList(),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLargeKeyboardTab() {
+    final rows = [
+      ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+      ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ñ'],
+      ['Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Á', 'É', 'Í', 'Ó', 'Ú'],
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(6),
+      child: Column(
+        children: [
+          // Textbox displaying currently typed word
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _typedText.isEmpty
+                        ? "Toca las letras para escribir..."
+                        : _typedText,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _typedText.isEmpty ? Colors.grey : null,
+                    ),
+                  ),
+                ),
+                if (_typedText.isNotEmpty)
+                  ElevatedButton(
+                    onPressed: () {
+                      _addWordToSentence(_typedText.trim(), 'keyboard');
+                      setState(() {
+                        _typedText = '';
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                    ),
+                    child: const Text(
+                      "Añadir",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // High Contrast Large Keys
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 4,
+                runSpacing: 4,
+                children: row.map((char) {
+                  return SizedBox(
+                    width: 34,
+                    height: 46,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _typedText += char.toLowerCase();
+                        });
+                      },
+                      child: Text(
+                        char,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // Control keys: Backspace and Space / Insert
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.shade700,
+                    ),
+                    onPressed: () {
+                      if (_typedText.isNotEmpty) {
+                        setState(() {
+                          _typedText = _typedText.substring(
+                            0,
+                            _typedText.length - 1,
+                          );
+                        });
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.backspace,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      "Borrar",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                    ),
+                    onPressed: () {
+                      if (_typedText.isNotEmpty) {
+                        _addWordToSentence(_typedText.trim(), 'keyboard');
+                        setState(() {
+                          _typedText = '';
+                        });
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.space_bar,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      "Espacio / Añadir",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -895,26 +1139,155 @@ class _MainAACScreenState extends State<MainAACScreen>
       "Cuéntame más sobre ese tema.",
     ];
 
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(8),
-      itemCount: socialPhrases.length,
-      itemBuilder: (context, idx) {
-        final phrase = socialPhrases[idx];
-        return Card(
-          elevation: 1,
-          margin: const EdgeInsets.only(bottom: 6),
-          child: ListTile(
-            dense: true,
-            title: Text(
-              phrase,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-            trailing: const Icon(Icons.volume_up, color: Colors.green),
-            onTap: () {
-              _speakText(phrase);
-              _sendToChatLog('user', phrase);
-            },
+      children: [
+        const Text(
+          "EXPRESIONES SOCIALES RÁPIDAS:",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.blueAccent,
           ),
+        ),
+        const SizedBox(height: 4),
+        ...socialPhrases.map(
+          (phrase) => Card(
+            elevation: 1,
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              dense: true,
+              title: Text(
+                phrase,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              trailing: const Icon(Icons.volume_up, color: Colors.green),
+              onTap: () {
+                _speakText(phrase);
+                _sendToChatLog('user', phrase);
+              },
+            ),
+          ),
+        ),
+        const Divider(height: 16, thickness: 1.5),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: const [
+                Text(
+                  "HUMOR Y MODISMOS CHILENOS ",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                Text("🇨🇱", style: TextStyle(fontSize: 12)),
+              ],
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+              onPressed: _openAddHumorDialog,
+              icon: const Icon(Icons.add, size: 16, color: Colors.white),
+              label: const Text(
+                "Agregar",
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ...humorPhrases.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final phrase = entry.value;
+          return Card(
+            elevation: 1,
+            color: Colors.red.shade50,
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              dense: true,
+              title: Text(
+                phrase,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Colors.red.shade900,
+                ),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.volume_up, color: Colors.green),
+                    onPressed: () {
+                      _speakText(phrase);
+                      _sendToChatLog('user', phrase);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    onPressed: () => _deleteHumorPhrase(idx),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  void _openAddHumorDialog() {
+    _humorPhraseController.clear();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            "Agregar Frase de Humor / Modismo 🇨🇱",
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          content: TextField(
+            controller: _humorPhraseController,
+            decoration: const InputDecoration(
+              hintText: "Ej. ¡Chúpalo entonces! / ¡Qué buena po!",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              onPressed: () {
+                _addHumorPhrase(_humorPhraseController.text);
+                Navigator.pop(context);
+              },
+              child: const Text(
+                "Guardar",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
         );
       },
     );
