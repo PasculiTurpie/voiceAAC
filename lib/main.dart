@@ -286,9 +286,10 @@ class _MainAACScreenState extends State<MainAACScreen>
   String activeCategory = 'Saludos';
   String _typedText = '';
 
-  double speechRate = 0.5; // FlutterTTS rate ranges 0.0 - 1.0
+  double speechRate = 0.5; // FlutterTTS rate ranges 0.0 - 3.0
   double speechPitch = 1.0;
-  String selectedVoice = '';
+  List<Map<String, String>> availableVoices = [];
+  Map<String, String>? selectedVoiceMap;
 
   List<ChatMessage> chatLog = [
     ChatMessage(
@@ -362,6 +363,32 @@ class _MainAACScreenState extends State<MainAACScreen>
     await flutterTts.setLanguage("es-ES");
     await flutterTts.setSpeechRate(speechRate);
     await flutterTts.setPitch(speechPitch);
+
+    try {
+      var voicesResult = await flutterTts.getVoices;
+      if (voicesResult != null) {
+        List<Map<String, String>> loaded = [];
+        for (var v in voicesResult) {
+          if (v is Map) {
+            String name = v["name"]?.toString() ?? "";
+            String locale = v["locale"]?.toString() ?? "";
+            if (locale.toLowerCase().contains("es") ||
+                name.toLowerCase().contains("spanish") ||
+                name.toLowerCase().contains("es-")) {
+              loaded.add({"name": name, "locale": locale});
+            }
+          }
+        }
+        setState(() {
+          availableVoices = loaded;
+          if (availableVoices.isNotEmpty) {
+            selectedVoiceMap = availableVoices.first;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error al cargar voces: $e");
+    }
   }
 
   void _loadStoredFavorites() async {
@@ -405,6 +432,9 @@ class _MainAACScreenState extends State<MainAACScreen>
     if (text.trim().isEmpty) return;
     await flutterTts.setSpeechRate(speechRate);
     await flutterTts.setPitch(speechPitch);
+    if (selectedVoiceMap != null) {
+      await flutterTts.setVoice(selectedVoiceMap!);
+    }
     await flutterTts.speak(text);
   }
 
@@ -1370,41 +1400,98 @@ class _MainAACScreenState extends State<MainAACScreen>
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Ajustes de Sintetizador de Voz"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("Velocidad de voz: ${speechRate.toStringAsFixed(1)}"),
-              Slider(
-                value: speechRate,
-                min: 0.1,
-                max: 1.0,
-                onChanged: (val) {
-                  setState(() {
-                    speechRate = val;
-                  });
-                },
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Ajustes de Sintetizador de Voz"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Velocidad de voz: ${speechRate.toStringAsFixed(1)}x"),
+                    Slider(
+                      value: speechRate.clamp(0.1, 3.0),
+                      min: 0.1,
+                      max: 3.0,
+                      divisions: 29,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          speechRate = val;
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text("Tono de voz: ${speechPitch.toStringAsFixed(1)}"),
+                    Slider(
+                      value: speechPitch.clamp(0.5, 2.0),
+                      min: 0.5,
+                      max: 2.0,
+                      divisions: 15,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          speechPitch = val;
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (availableVoices.isNotEmpty) ...[
+                      const Text(
+                        "Seleccionar Voz (Español):",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      DropdownButton<Map<String, String>>(
+                        isExpanded: true,
+                        value: selectedVoiceMap,
+                        items: availableVoices.map((v) {
+                          final name = v["name"] ?? "Voz";
+                          final isMale =
+                              name.toLowerCase().contains("male") ||
+                              name.toLowerCase().contains("jorge") ||
+                              name.toLowerCase().contains("diego") ||
+                              name.toLowerCase().contains("hombre") ||
+                              name.toLowerCase().contains("carlos");
+                          return DropdownMenuItem<Map<String, String>>(
+                            value: v,
+                            child: Text(
+                              "${v["name"]} (${v["locale"]})${isMale ? ' 👨' : ' 👩'}",
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              selectedVoiceMap = val;
+                            });
+                            setState(() {});
+                            flutterTts.setVoice(val);
+                          }
+                        },
+                      ),
+                    ] else
+                      const Text(
+                        "Voces adicionales disponibles según el motor TTS de tu dispositivo.",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                  ],
+                ),
               ),
-              Text("Tono de voz: ${speechPitch.toStringAsFixed(1)}"),
-              Slider(
-                value: speechPitch,
-                min: 0.5,
-                max: 1.5,
-                onChanged: (val) {
-                  setState(() {
-                    speechPitch = val;
-                  });
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Aceptar"),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Aceptar"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
